@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SPND 同轴圆柱探测器三维模型</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07111f;
+      --panel: rgba(10, 24, 42, .94);
+      --line: rgba(160, 190, 220, .2);
+      --text: #e8f1fb;
+      --muted: #9eb2c8;
+      --accent: #64d8ff;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      min-width: 320px;
+      overflow: hidden;
+      color: var(--text);
+      background: radial-gradient(circle at 70% 35%, #123253 0, var(--bg) 58%);
+      font-family: Inter, "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    }
+
+    #app { position: relative; height: 100%; }
+    #viewport { position: absolute; inset: 0; }
+    #viewport canvas { display: block; width: 100%; height: 100%; }
+
+    .panel {
+      position: absolute;
+      z-index: 2;
+      top: 18px;
+      left: 18px;
+      width: min(310px, calc(100vw - 36px));
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      box-shadow: 0 14px 40px rgba(0, 0, 0, .28);
+      backdrop-filter: blur(12px);
+    }
+
+    h1 { margin: 0 0 6px; font-size: 19px; font-weight: 500; }
+    h2 {
+      margin: 18px 0 8px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .hint { margin-top: 10px; font-size: 11px; }
+
+    .layer-row, .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-height: 30px;
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .layer-row input, .toggle-row input { accent-color: var(--accent); }
+    .swatch {
+      width: 13px;
+      height: 13px;
+      flex: 0 0 auto;
+      border: 1px solid rgba(255,255,255,.45);
+      border-radius: 3px;
+    }
+    .rh { background: #c6d1de; }
+    .alumina { background: #397fd0; }
+    .steel { background: #f17835; }
+    .helium { background: #7ed9ec; }
+    .source { background: #ffe66d; }
+    .trajectory { background: #ff4d8d; }
+
+    .actions { display: flex; gap: 8px; margin-top: 15px; }
+    button {
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid rgba(100, 216, 255, .5);
+      border-radius: 7px;
+      color: var(--text);
+      background: rgba(100, 216, 255, .12);
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    button:hover { background: rgba(100, 216, 255, .22); }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .info {
+      position: absolute;
+      z-index: 2;
+      right: 18px;
+      bottom: 18px;
+      width: min(330px, calc(100vw - 36px));
+      padding: 13px 15px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      color: var(--muted);
+      background: rgba(10, 24, 42, .84);
+      font-size: 12px;
+      line-height: 1.65;
+      pointer-events: none;
+    }
+    .info strong { color: var(--text); font-weight: 500; }
+    .status { color: var(--accent); }
+
+    .title-mark {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      margin-right: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 14px var(--accent);
+    }
+
+    @media (max-width: 650px) {
+      .panel { top: 10px; left: 10px; padding: 13px; }
+      .panel h2 { margin-top: 11px; }
+      .info { right: 10px; bottom: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="viewport" aria-label="SPND探测器三维模型"></div>
+
+    <aside class="panel">
+      <h1><span class="title-mark"></span>SPND 同轴圆柱探测器</h1>
+      <p>基于当前 Geant4 模型的三维示意。拖动旋转，滚轮缩放，右键平移。</p>
+
+      <h2>显示部件</h2>
+      <label class="layer-row"><input type="checkbox" data-layer="emitter" checked><span class="swatch rh"></span>Rh 发射极（0–0.025 cm）</label>
+      <label class="layer-row"><input type="checkbox" data-layer="insulator" checked><span class="swatch alumina"></span>Al₂O₃ 绝缘层（0.025–0.055 cm）</label>
+      <label class="layer-row"><input type="checkbox" data-layer="collector" checked><span class="swatch steel"></span>316L 收集极（0.055–0.070 cm）</label>
+      <label class="layer-row"><input type="checkbox" data-layer="gas" checked><span class="swatch helium"></span>He 气隙（0.070–0.155 cm）</label>
+      <label class="layer-row"><input type="checkbox" data-layer="guide" checked><span class="swatch steel"></span>316L 导向管（0.155–0.170 cm）</label>
+      <label class="layer-row"><input type="checkbox" data-layer="source" checked><span class="swatch source"></span>中子源圆柱面（半径 0.1 cm）</label>
+      <label class="layer-row"><input id="trajectory-toggle" type="checkbox"><span class="swatch trajectory"></span>真实 Geant4 轨迹（n / γ / e）</label>
+
+      <h2>视图</h2>
+      <label class="toggle-row"><input id="cutaway" type="checkbox" checked>显示纵向截面，查看内部层</label>
+      <label class="toggle-row"><input id="grid" type="checkbox" checked>显示坐标参考网格</label>
+      <label class="toggle-row"><span>轨迹事件：</span><select id="event-select" aria-label="选择轨迹事件"><option value="all">全部事件</option></select></label>
+
+      <div class="actions">
+        <button id="reset" type="button">重置视角</button>
+        <button id="all" type="button">显示全部</button>
+        <button id="play" type="button" title="从头播放真实 Geant4 轨迹">▶ 播放轨迹</button>
+        <button id="pause" type="button" title="暂停轨迹播放">Ⅱ 暂停</button>
+      </div>
+      <p class="hint">注：为便于观察，径向尺寸放大 12 倍；长度仍按 25 cm 显示。轨迹来自小样本 Geant4 实际 step。</p>
+    </aside>
+
+    <div class="info" aria-live="polite">
+      <strong>几何参数</strong><br>
+      全长：25 cm　外半径：0.170 cm<br>
+      <span class="status" id="view-status">当前视图：纵向截面</span><br>
+      <span class="status" id="trajectory-status">实际轨迹：加载中…</span><br>
+      轨迹颜色：青色 neutron、黄色 gamma、粉红色 e−<br>
+      轴向为 Y；红/绿/蓝分别表示 X/Y/Z 方向
+    </div>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three.module.js"
+      }
+    }
+  </script>
+  <script type="module">
+    // Keep the rendering engine inside the site so the page also works when esm.sh is blocked.
+    import * as THREE from "./vendor/three.module.js";
+    import { OrbitControls } from "./vendor/OrbitControls.js";
+
+    const viewport = document.getElementById("viewport");
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x07111f);
+    scene.fog = new THREE.Fog(0x07111f, 45, 90);
+
+    const camera = new THREE.PerspectiveCamera(38, 1, 0.01, 150);
+    camera.position.set(31, 20, 31);
+    camera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    viewport.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.07;
+    controls.target.set(0, 0, 0);
+    controls.minDistance = 7;
+    controls.maxDistance = 70;
+
+    scene.add(new THREE.HemisphereLight(0xaed6ff, 0x152033, 2.2));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 3.2);
+    keyLight.position.set(18, 32, 24);
+    scene.add(keyLight);
+    const rimLight = new THREE.DirectionalLight(0x4a9eff, 1.5);
+    rimLight.position.set(-25, 8, -22);
+    scene.add(rimLight);
+
+    const model = new THREE.Group();
+    scene.add(model);
+    const trajectories = new THREE.Group();
+    trajectories.renderOrder = 20;
+    trajectories.visible = false;
+    model.add(trajectories);
+    const trajectoryLines = [];
+    const trajectoryColors = { neutron: 0x4de7ff, gamma: 0xffe66d, "e-": 0xff4d8d, "e+": 0xb88cff };
+    let trajectoryEvents = [];
+    // 默认隐藏轨迹；只有点击 ▶ 按钮后才显示并播放。
+    let trajectoryProgress = 1;
+    let playing = false;
+    const layerObjects = new Map();
+    const radialScale = 12;
+    const fullLength = 25;
+    const cutGap = 0.92;
+
+    const layers = [
+      { id: "emitter", name: "Rh 发射极", rIn: 0, rOut: 0.025, color: 0xc6d1de, opacity: 0.82, metalness: 0.6 },
+      { id: "insulator", name: "Al₂O₃ 绝缘层", rIn: 0.025, rOut: 0.055, color: 0x397fd0, opacity: 0.48, metalness: 0.05 },
+      { id: "collector", name: "316L 收集极", rIn: 0.055, rOut: 0.070, color: 0xf17835, opacity: 0.80, metalness: 0.72 },
+      { id: "gas", name: "He 气隙", rIn: 0.070, rOut: 0.155, color: 0x7ed9ec, opacity: 0.12, metalness: 0.0 },
+      { id: "guide", name: "316L 导向管", rIn: 0.155, rOut: 0.170, color: 0x858d9b, opacity: 0.65, metalness: 0.78 }
+    ];
+
+    function tubeGeometry(rIn, rOut, length, cutaway) {
+      const segments = 128;
+      const start = cutaway ? cutGap / 2 : 0;
+      const thetaLength = cutaway ? Math.PI * 2 - cutGap : Math.PI * 2;
+      const positions = [];
+      const indices = [];
+      const rings = { outerBottom: [], outerTop: [], innerBottom: [], innerTop: [] };
+
+      function vertex(radius, y, angle) {
+        const index = positions.length / 3;
+        positions.push(radius * Math.cos(angle), y, radius * Math.sin(angle));
+        return index;
+      }
+
+      for (let i = 0; i <= segments; i += 1) {
+        const angle = start + thetaLength * i / segments;
+        rings.outerBottom.push(vertex(rOut * radialScale, -length / 2, angle));
+        rings.outerTop.push(vertex(rOut * radialScale, length / 2, angle));
+        rings.innerBottom.push(vertex(Math.max(rIn, 0.0002) * radialScale, -length / 2, angle));
+        rings.innerTop.push(vertex(Math.max(rIn, 0.0002) * radialScale, length / 2, angle));
+      }
+
+      function quad(a, b, c, d) { indices.push(a, b, d, b, c, d); }
+      for (let i = 0; i < segments; i += 1) {
+        quad(rings.outerBottom[i], rings.outerBottom[i + 1], rings.outerTop[i + 1], rings.outerTop[i]);
+        quad(rings.innerBottom[i + 1], rings.innerBottom[i], rings.innerTop[i], rings.innerTop[i + 1]);
+        quad(rings.outerTop[i], rings.outerTop[i + 1], rings.innerTop[i + 1], rings.innerTop[i]);
+        quad(rings.outerBottom[i + 1], rings.outerBottom[i], rings.innerBottom[i], rings.innerBottom[i + 1]);
+      }
+
+      if (cutaway) {
+        quad(rings.outerBottom[0], rings.outerTop[0], rings.innerTop[0], rings.innerBottom[0]);
+        quad(rings.outerTop[segments], rings.outerBottom[segments], rings.innerBottom[segments], rings.innerTop[segments]);
+      }
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+      return geometry;
+    }
+
+    function makeLayer(layer, cutaway) {
+      const geometry = tubeGeometry(layer.rIn, layer.rOut, fullLength, cutaway);
+      const material = new THREE.MeshPhysicalMaterial({
+        color: layer.color,
+        roughness: layer.metalness > 0.5 ? 0.28 : 0.55,
+        metalness: layer.metalness,
+        transparent: layer.opacity < 1,
+        opacity: layer.opacity,
+        side: THREE.DoubleSide,
+        depthWrite: false
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      const edgeMaterial = new THREE.LineBasicMaterial({ color: layer.color, transparent: true, opacity: Math.min(0.85, layer.opacity + 0.15) });
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry, 22), edgeMaterial);
+      const group = new THREE.Group();
+      group.add(mesh, edges);
+      group.userData.label = layer.name;
+      return group;
+    }
+
+    function rebuildModel() {
+      const cutaway = document.getElementById("cutaway").checked;
+      for (const object of layerObjects.values()) {
+        model.remove(object);
+        object.traverse(child => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) child.material.dispose();
+        });
+      }
+      layerObjects.clear();
+      for (const layer of layers) {
+        const object = makeLayer(layer, cutaway);
+        object.visible = document.querySelector(`[data-layer="${layer.id}"]`).checked;
+        layerObjects.set(layer.id, object);
+        model.add(object);
+      }
+      document.getElementById("view-status").textContent = cutaway ? "当前视图：纵向截面" : "当前视图：完整圆柱层";
+    }
+
+    const source = new THREE.Group();
+    const sourceGeometry = new THREE.CylinderGeometry(0.1 * radialScale, 0.1 * radialScale, fullLength, 96, 1, true);
+    const sourceMaterial = new THREE.MeshBasicMaterial({ color: 0xffe66d, wireframe: true, transparent: true, opacity: 0.38 });
+    source.add(new THREE.Mesh(sourceGeometry, sourceMaterial));
+    model.add(source);
+
+    function clearTrajectories() {
+      for (const line of trajectoryLines) {
+        trajectories.remove(line);
+        line.geometry.dispose();
+        line.material.dispose();
+      }
+      trajectoryLines.length = 0;
+    }
+
+    function setTrajectoryProgress(progress) {
+      trajectoryProgress = Math.max(0, Math.min(1, progress));
+      for (const line of trajectoryLines) {
+        line.geometry.setDrawRange(0, Math.floor(line.userData.stepCount * trajectoryProgress) * 2);
+      }
+    }
+
+    // Geant4 G4Tubs uses Z as the cylinder axis; this scene uses Y as the axis.
+    function toDisplayPosition(position) {
+      return [position[0] * radialScale, position[2], position[1] * radialScale];
+    }
+
+    function renderTrajectories(selection = "all") {
+      clearTrajectories();
+      const selected = selection === "all" ? trajectoryEvents : trajectoryEvents.filter(event => String(event.event) === selection);
+      for (const event of selected) {
+        const tracks = new Map();
+        for (const step of event.steps) {
+          if (!tracks.has(step.track)) tracks.set(step.track, { particle: step.particle, steps: [] });
+          tracks.get(step.track).steps.push(step);
+        }
+        for (const track of tracks.values()) {
+          const positions = [];
+          for (const step of track.steps) {
+            const pre = toDisplayPosition(step.pre);
+            const post = toDisplayPosition(step.post);
+            positions.push(
+              pre[0], pre[1], pre[2], post[0], post[1], post[2]
+            );
+          }
+          const geometry = new THREE.BufferGeometry();
+          geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+          geometry.setDrawRange(0, 0);
+          const material = new THREE.LineBasicMaterial({
+            color: trajectoryColors[track.particle] || 0xffffff,
+            transparent: true,
+            opacity: track.particle === "e-" || track.particle === "e+" ? 0.95 : 0.8,
+            depthTest: false
+          });
+          const line = new THREE.LineSegments(geometry, material);
+          line.userData.stepCount = track.steps.length;
+          line.renderOrder = 30;
+          trajectories.add(line);
+          trajectoryLines.push(line);
+        }
+      }
+      setTrajectoryProgress(playing ? 0 : 1);
+    }
+
+    async function loadTrajectories() {
+      const status = document.getElementById("trajectory-status");
+      try {
+        const response = await fetch("spnd_trajectories.jsonl", { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const text = await response.text();
+        trajectoryEvents = text.trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
+        const selector = document.getElementById("event-select");
+        for (const event of trajectoryEvents) {
+          const option = document.createElement("option");
+          option.value = event.event;
+          option.textContent = `事件 ${event.event}`;
+          selector.appendChild(option);
+        }
+        renderTrajectories();
+        trajectories.visible = false;
+        const steps = trajectoryEvents.reduce((sum, event) => sum + event.steps.length, 0);
+        status.textContent = `实际轨迹：已加载 ${trajectoryEvents.length} 个事件、${steps} 个 step（点击 ▶ 播放）`;
+      } catch (error) {
+        status.textContent = "实际轨迹：未加载（请在 build 目录启动网页服务器）";
+        document.getElementById("trajectory-toggle").checked = false;
+        trajectories.visible = false;
+        console.warn("Unable to load spnd_trajectories.jsonl", error);
+      }
+    }
+
+    const axes = new THREE.AxesHelper(5);
+    axes.position.set(-8, -13.1, -8);
+    scene.add(axes);
+
+    const grid = new THREE.GridHelper(36, 18, 0x2f6086, 0x1a3652);
+    grid.position.y = -13.1;
+    grid.material.transparent = true;
+    grid.material.opacity = 0.38;
+    scene.add(grid);
+
+    rebuildModel();
+
+    document.querySelectorAll("[data-layer]").forEach(input => {
+      input.addEventListener("change", () => {
+        if (input.dataset.layer === "source") source.visible = input.checked;
+        else layerObjects.get(input.dataset.layer).visible = input.checked;
+      });
+    });
+    document.getElementById("cutaway").addEventListener("change", rebuildModel);
+    document.getElementById("grid").addEventListener("change", event => { grid.visible = event.target.checked; });
+    document.getElementById("trajectory-toggle").addEventListener("change", event => { trajectories.visible = event.target.checked; });
+    document.getElementById("event-select").addEventListener("change", event => { playing = false; renderTrajectories(event.target.value); });
+    document.getElementById("all").addEventListener("click", () => {
+      document.querySelectorAll("[data-layer]").forEach(input => { input.checked = true; });
+      layerObjects.forEach(object => { object.visible = true; });
+      source.visible = true;
+    });
+    document.getElementById("play").addEventListener("click", () => {
+      playing = true;
+      trajectories.visible = true;
+      document.getElementById("trajectory-toggle").checked = true;
+      setTrajectoryProgress(0);
+    });
+    document.getElementById("pause").addEventListener("click", () => {
+      playing = false;
+    });
+    document.getElementById("reset").addEventListener("click", () => {
+      camera.position.set(31, 20, 31);
+      controls.target.set(0, 0, 0);
+      controls.update();
+    });
+
+    function resize() {
+      const width = viewport.clientWidth;
+      const height = viewport.clientHeight;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height, false);
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      if (playing) {
+        setTrajectoryProgress(trajectoryProgress + 0.004);
+        if (trajectoryProgress >= 1) playing = false;
+      }
+      renderer.render(scene, camera);
+    }
+    loadTrajectories();
+    animate();
+  </script>
+</body>
+</html>
